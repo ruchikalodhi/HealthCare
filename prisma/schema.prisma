@@ -1,0 +1,104 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  BOOKED
+  COMPLETED
+  CANCELLED
+  CANCELLED_BY_DOCTOR
+  PENDING_RESCHEDULE
+}
+
+model User {
+  id                    String        @id @default(uuid())
+  email                 String        @unique
+  password              String
+  name                  String
+  role                  Role          @default(PATIENT)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  
+  // Relations
+  doctorProfile         DoctorProfile?
+  appointmentsAsPatient Appointment[]
+}
+
+model DoctorProfile {
+  id                String        @id @default(uuid())
+  userId            String        @unique
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialization    String
+  workingHoursStart String        // e.g. "09:00"
+  workingHoursEnd   String        // e.g. "17:00"
+  slotDuration      Int           // Slot duration in minutes (e.g. 15, 30, 60)
+  leaveDays         String[]      // Array of ISO YYYY-MM-DD date strings
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  appointments      Appointment[]
+}
+
+model Appointment {
+  id                  String             @id @default(uuid())
+  patientId           String
+  patient             User               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorProfileId     String
+  doctorProfile       DoctorProfile      @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  dateTime            DateTime           // Scheduled start time
+  status              AppointmentStatus  @default(SCHEDULED)
+  symptoms            String?            // Symptoms submitted by the patient
+  googleEventId       String?            // Associated Google Calendar Event ID
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  // Relations
+  aiSummary           AISummary?
+  medicationSchedules MedicationSchedule[]
+
+  // Indexes to speed up appointment slot searches and avoid double booking
+  @@index([doctorProfileId, dateTime])
+}
+
+model AISummary {
+  id                 String      @id @default(uuid())
+  appointmentId      String      @unique
+  appointment        Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  urgency            String      @default("PENDING_REVIEW")
+  chiefComplaint     String      @default("")
+  suggestedQuestions String[]
+  preVisitSummary    String      // AI-generated symptom summary for the doctor
+  postVisitSummary   String      // AI-generated post-visit plan summary for the patient
+  lifestyleAdvice    String[]
+  isFallback         Boolean     @default(false)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+}
+
+model MedicationSchedule {
+  id            String      @id @default(uuid())
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  medicationName String
+  dosage        String      // e.g. "500mg" or "1 tablet"
+  frequency     String      // e.g. "twice a day"
+  instructions  String      @default("")
+  startDate     DateTime
+  endDate       DateTime
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}

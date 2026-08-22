@@ -1,0 +1,67 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Environment Variables & Secrets (CRITICAL: Never commit database/API keys)
+.env
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Next.js Build Output
+/.next/
+/out/
+
+# Production & Packaging
+/build
+/dist
+
+# Prisma Engine Binaries & Local DBs
+node_modules/.prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Root Temporary Media Files (Track public/logo.png, ignore unneeded root copy)
+/Logo.png
+/Logo.jpg
+/Logo.jpeg
+
+# Logs & Error Dumps
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# OS-Specific Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# IDE & Editor Configurations
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# Temporary Files, Caches & Type Artifacts
+.turbo
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+next-env.d.ts
