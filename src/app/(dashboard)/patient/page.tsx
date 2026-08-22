@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Calendar, Clock, Stethoscope, AlertTriangle, CheckCircle, XCircle, Plus } from 'lucide-react';
+import { Calendar, Clock, Stethoscope, AlertTriangle, CheckCircle, XCircle, Plus, ArrowRight } from 'lucide-react';
 
 interface Appointment {
   id: string;
