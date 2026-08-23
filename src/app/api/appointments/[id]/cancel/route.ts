@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Role, AppointmentStatus } from '@prisma/client';
+import { emailQueue, calendarQueue } from '@/lib/queue/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,16 @@ export async function POST(
     const appointment = await prisma.appointment.findUnique({
       where: { id: appointmentId },
       include: {
-        doctorProfile: true,
+        patient: {
+          select: { name: true, email: true },
+        },
+        doctorProfile: {
+          include: {
+            user: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        },
       },
     });
 
@@ -47,6 +57,24 @@ export async function POST(
         status: AppointmentStatus.CANCELLED,
       },
     });
+
+    // Dispatch background jobs asynchronously: notify the patient and
+    // remove the Google Calendar event so both sides' calendars stay in
+    // sync with the cancellation.
+    await emailQueue.add('send-cancellation-notice', {
+      patientEmail: appointment.patient.email,
+      patientName: appointment.patient.name,
+      doctorName: appointment.doctorProfile.user.name,
+      dateTime: appointment.dateTime.toISOString(),
+      rebookLink: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/patient/book`,
+    });
+
+    if (appointment.googleEventId) {
+      await calendarQueue.add('delete-event', {
+        googleEventId: appointment.googleEventId,
+        doctorId: appointment.doctorProfile.user.id,
+      });
+    }
 
     return NextResponse.json({
       message: 'Appointment cancelled successfully',

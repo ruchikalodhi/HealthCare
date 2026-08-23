@@ -106,16 +106,31 @@ export async function processJobInline(
     if (queueName === 'calendar-queue') {
       switch (jobName) {
         case 'create-event': {
-          const { appointmentId, doctorId, patientName, doctorName, specialization, dateTime, symptoms } = data;
-          
-          // Call API
-          const googleEventId = await createCalendarEvent(
+          const {
+            appointmentId,
+            doctorId,
             patientName,
+            patientEmail,
             doctorName,
+            doctorEmail,
             specialization,
             dateTime,
-            symptoms
-          );
+            slotDurationMinutes,
+            symptoms,
+          } = data;
+
+          // Call API
+          const googleEventId = await createCalendarEvent({
+            doctorUserId: doctorId,
+            patientName,
+            patientEmail,
+            doctorName,
+            doctorEmail,
+            specialization,
+            dateTime,
+            slotDurationMinutes,
+            symptoms,
+          });
 
           // Store event ID in Appointment model
           await prisma.appointment.update({
@@ -128,14 +143,20 @@ export async function processJobInline(
         }
 
         case 'delete-event': {
-          const { googleEventId } = data;
-          await deleteCalendarEvent(googleEventId);
+          const { googleEventId, doctorId } = data;
+          await deleteCalendarEvent({ doctorUserId: doctorId, eventId: googleEventId });
           break;
         }
 
         case 'update-event': {
-          const { googleEventId, doctorName, dateTime } = data;
-          await updateCalendarEvent(googleEventId, doctorName, dateTime);
+          const { googleEventId, doctorId, doctorName, dateTime, slotDurationMinutes } = data;
+          await updateCalendarEvent({
+            doctorUserId: doctorId,
+            eventId: googleEventId,
+            doctorName,
+            dateTime,
+            slotDurationMinutes,
+          });
           break;
         }
 

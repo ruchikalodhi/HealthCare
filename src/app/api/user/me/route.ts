@@ -32,6 +32,11 @@ export async function GET(req: NextRequest) {
             leaveDays: true,
           },
         },
+        googleAccount: {
+          select: {
+            updatedAt: true,
+          },
+        },
       },
     });
 

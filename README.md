@@ -11,6 +11,7 @@ HealthCare is a secure, multi-role medical booking and consultation platform. It
 * **Intake AI Summary**: Generates pre-visit chief complaints, urgency ratings (`ROUTINE`, `URGENT`, `EMERGENCY`), and doctor-facing diagnostic questions using strict JSON structured outputs.
 * **Clinical Translator**: Processes complex doctor notes and outputs jargon-free recovery summaries alongside structured drug prescriptions in a unified `prisma.$transaction`.
 * **Background Jobs (BullMQ)**: Offloads transactional emails and Google Calendar event syncs (`googleEventId`) to asynchronous workers with exponential retry backoff policies.
+* **Real Google Calendar Sync (OAuth 2.0)**: Doctors and patients connect their Google account from Settings; booking, rescheduling, and cancelling appointments create, update, or delete a real event (with both parties as attendees) via the Calendar API — see "Google Calendar Setup" below.
 * **Automatic Medication Reminders**: Scheduled daily cron triggers check active prescription schedules and queue dosage reminder notices.
 * **Premium Design System**: Fully custom interface built with Navy `#232B59`, Accent Pink `#F2CEE2`, Accent Blue `#94C6F2`, Mint Green `#A7D9C1`, and Warm Yellow `#F2D06B`.
 
@@ -45,8 +46,28 @@ OPENAI_API_KEY="sk-proj-your-key"
 RESEND_API_KEY="re_yourkey"
 GOOGLE_CLIENT_ID="oauth-client-id"
 GOOGLE_CLIENT_SECRET="oauth-client-secret"
-GOOGLE_REDIRECT_URI="http://localhost:3000/api/auth/callback/google"
+GOOGLE_REDIRECT_URI="http://localhost:3000/api/auth/google/callback"
 ```
+
+### Step 2.5: Google Calendar Setup
+
+Without this, calendar sync silently falls back to a logged mock event (see
+`src/lib/calendar/google.ts`) — appointments still book fine, but nothing
+appears on anyone's real calendar. To enable real Google Calendar events:
+
+1. **Create a Google Cloud project.** Go to the [Google Cloud Console](https://console.cloud.google.com/), create a new project (or select an existing one).
+2. **Enable the Calendar API.** In the project, go to *APIs & Services → Library*, search for **Google Calendar API**, and click **Enable**.
+3. **Configure the OAuth consent screen.** Under *APIs & Services → OAuth consent screen*, choose **External** (or **Internal** if you're on a Google Workspace org), fill in the app name/support email, and add the scope `https://www.googleapis.com/auth/calendar.events`. While the app is in "Testing" mode, add any Google accounts you'll test with (doctor/patient test users) under **Test users**.
+4. **Create an OAuth client ID.** Under *APIs & Services → Credentials → Create Credentials → OAuth client ID*, choose **Web application**.
+5. **Set the authorized redirect URI.** Add exactly:
+   ```
+   http://localhost:3000/api/auth/google/callback
+   ```
+   (swap the host for your deployed domain in production, e.g. `https://yourapp.com/api/auth/google/callback`).
+6. **Copy the client ID/secret** into `.env` as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, and make sure `GOOGLE_REDIRECT_URI` matches step 5 exactly.
+7. **Connect an account in the app.** After logging in as a doctor (or patient), go to **Settings → Google Calendar → Connect Google Calendar**. This starts the consent flow at `/api/auth/google/connect` and stores the resulting tokens in the `GoogleAccount` table. Appointments are created on the calendar of the doctor tied to the appointment, with the patient and doctor added as attendees.
+
+If a doctor hasn't connected their Google account, booking still works — the system logs a mock event instead of failing the request.
 
 ### Step 3: Run Database Migrations & Seeds
 Generate Prisma typings, push schemas, and execute the seeder script to populate demo profiles:
@@ -89,25 +110,57 @@ Use these seeded credentials to test multi-role features:
 ```
 healthcare-appointment-system/
 ├── prisma/
-│   ├── schema.prisma         # Database Schemas (User, Appointment, AISummary, MedicationSchedule)
-│   └── seed.ts               # Multi-role test profiles seed script
+│   ├── schema.prisma              # DB schema (User, GoogleAccount, DoctorProfile, Appointment, AISummary, MedicationSchedule)
+│   └── seed.ts                    # Multi-role test profiles seed script
 ├── src/
-│   ├── middleware.ts         # NextAuth path authorization guard
+│   ├── middleware.ts               # NextAuth path authorization guard (role-based route access)
 │   ├── lib/
-│   │   ├── slots.ts          # Availability slot calculation engine
+│   │   ├── slots.ts                # Availability slot calculation engine
+│   │   ├── validations.ts          # Zod request schemas
+│   │   ├── prisma.ts / redis.ts    # Client singletons
+│   │   ├── auth.ts                 # NextAuth config (credentials login)
+│   │   ├── google-oauth.ts         # Google OAuth2Client helper: consent URL, token exchange, auto-refresh
 │   │   ├── ai/
-│   │   │   └── summaries.ts  # Structured intake insights & note translations
+│   │   │   ├── client.ts / prompts.ts / schemas.ts
+│   │   │   └── summaries.ts        # Structured intake insights & note translations
 │   │   ├── queue/
-│   │   │   ├── client.ts     # BullMQ Redis setup with exponential retries
-│   │   │   └── workers.ts    # Background job dispatch (Emails, Google Calendar Sync)
+│   │   │   ├── client.ts           # BullMQ Redis setup (falls back to inline MockQueue)
+│   │   │   └── workers.ts          # Background job dispatch: emails + Google Calendar sync
 │   │   ├── email/
-│   │   │   └── client.ts     # SMTP transporter configuration
+│   │   │   ├── client.ts           # SMTP/Resend transporter
+│   │   │   └── templates.ts        # Email HTML/text templates
 │   │   └── calendar/
-│   │       └── google.ts     # Google Calendar event handlers
+│   │       └── google.ts           # Google Calendar event handlers (create/update/delete via googleapis)
+│   ├── components/
+│   │   ├── ui/                     # Button, Card, Input primitives
+│   │   └── shared/
+│   │       ├── Navbar.tsx / Sidebar.tsx
+│   │       └── GoogleCalendarConnectCard.tsx  # "Connect Google Calendar" status card
 │   └── app/
-│       ├── page.tsx          # Design System Landing Page
-│       ├── (auth)/           # Framed Login & Registration Gates
-│       └── (dashboard)/      # Multi-role layouts (Patient, Doctor, Admin panels)
+│       ├── page.tsx                # Design System Landing Page
+│       ├── (auth)/                 # Login & Registration
+│       ├── (dashboard)/
+│       │   ├── admin/              # Overview, Manage Doctors, Onboard Doctor
+│       │   ├── doctor/
+│       │   │   ├── page.tsx        # Doctor dashboard
+│       │   │   ├── appointments/[id]/
+│       │   │   └── settings/       # Google Calendar connect (doctor)
+│       │   └── patient/
+│       │       ├── page.tsx        # Patient dashboard
+│       │       ├── book/ · appointments/[id]/
+│       │       └── settings/       # Google Calendar connect (patient)
+│       └── api/
+│           ├── auth/
+│           │   ├── [...nextauth]/  # NextAuth credentials handler
+│           │   ├── register/
+│           │   └── google/
+│           │       ├── connect/    # Starts the Google consent flow
+│           │       └── callback/   # Exchanges code → tokens → GoogleAccount row
+│           ├── slots/book/ · slots/hold/
+│           ├── appointments/ · appointments/[id]/cancel/ · pre-summary/ · post-summary/
+│           ├── admin/doctors/[id]/ # Profile + leave-day updates (cascades cancellations)
+│           ├── user/me/
+│           └── cron/medication-reminders/
 ```
 
 ---

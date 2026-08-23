@@ -118,6 +118,7 @@ export async function PUT(
           if (appt.googleEventId) {
             await calendarQueue.add('delete-event', {
               googleEventId: appt.googleEventId,
+              doctorId: existingDoctor.id,
             });
           }
         }

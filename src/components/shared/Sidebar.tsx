@@ -42,6 +42,11 @@ export default function Sidebar() {
       href: '/doctor',
       icon: LayoutDashboard,
     },
+    {
+      name: 'Settings',
+      href: '/doctor/settings',
+      icon: Settings,
+    },
   ];
 
   const patientLinks = [
@@ -49,6 +54,11 @@ export default function Sidebar() {
       name: 'Patient Portal',
       href: '/patient',
       icon: LayoutDashboard,
+    },
+    {
+      name: 'Settings',
+      href: '/patient/settings',
+      icon: Settings,
     },
   ];
 

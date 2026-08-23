@@ -35,6 +35,23 @@ model User {
   // Relations
   doctorProfile         DoctorProfile?
   appointmentsAsPatient Appointment[]
+  googleAccount         GoogleAccount?
+}
+
+// Stores a user's Google OAuth 2.0 tokens so real Calendar events can be
+// created on their behalf (see src/lib/calendar/google.ts). A row only
+// exists once the user has completed the "Connect Google Calendar" consent
+// flow (src/app/api/auth/google/connect + /callback).
+model GoogleAccount {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken  String
+  refreshToken String
+  expiryDate   DateTime
+  scope        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model DoctorProfile {
