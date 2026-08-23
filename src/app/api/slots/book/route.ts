@@ -109,9 +109,12 @@ export async function POST(req: NextRequest) {
       appointmentId: newAppointment.id,
       doctorId: doctor.id,
       patientName: session.user.name,
+      patientEmail: session.user.email,
       doctorName: doctor.name,
+      doctorEmail: doctor.email,
       specialization: doctor.doctorProfile.specialization,
       dateTime: parsedDateTime.toISOString(),
+      slotDurationMinutes: doctor.doctorProfile.slotDuration,
       symptoms,
     });
 
