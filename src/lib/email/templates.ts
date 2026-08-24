@@ -76,6 +76,42 @@ export function getCancellationEmail(
   return { html, text, subject };
 }
 
+export function getRescheduleEmail(
+  patientName: string,
+  doctorName: string,
+  oldDateTime: string,
+  newDateTime: string
+): EmailPayload {
+  const formattedOld = new Date(oldDateTime).toUTCString();
+  const formattedNew = new Date(newDateTime).toUTCString();
+  const subject = `Rescheduled: Appointment with Dr. ${doctorName}`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 8px;">
+      <h2 style="color: #2563eb; text-align: center;">Appointment Rescheduled</h2>
+      <p>Dear <strong>${patientName}</strong>,</p>
+      <p>Your appointment with <strong>Dr. ${doctorName}</strong> has been moved to a new time.</p>
+
+      <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0;">
+        <p style="margin: 5px 0; text-decoration: line-through; color: #94a3b8;"><strong>Previous Time:</strong> ${formattedOld} (UTC)</p>
+        <p style="margin: 5px 0; color: #1e293b;"><strong>New Time:</strong> ${formattedNew} (UTC)</p>
+      </div>
+
+      <p>Your calendar event has been updated automatically. Please arrive 5 minutes early for the new time.</p>
+      <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+      <p style="font-size: 11px; color: #64748b; text-align: center;">HealthAlign Clinic Systems, Inc.</p>
+    </div>
+  `;
+
+  const text = `
+    Dear ${patientName},
+    Your appointment with Dr. ${doctorName} has been rescheduled from ${formattedOld} (UTC) to ${formattedNew} (UTC).
+    Your calendar event has been updated automatically.
+  `;
+
+  return { html, text, subject };
+}
+
 export function getPostVisitSummaryEmail(
   patientName: string,
   doctorName: string,

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Calendar, Clock, Stethoscope, AlertTriangle, CheckCircle, XCircle, Plus, ArrowRight } from 'lucide-react';
 
@@ -15,6 +16,7 @@ interface Appointment {
   doctorProfile: {
     specialization: string;
     user: {
+      id: string;
       name: string;
     };
   };
@@ -30,11 +32,24 @@ interface Appointment {
   }[];
 }
 
+interface Slot {
+  time: string;
+  dateTime: string;
+}
+
 export default function PatientDashboard() {
   const { data: session } = useSession();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Reschedule modal state
+  const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleSlots, setRescheduleSlots] = useState<Slot[]>([]);
+  const [rescheduleSlotsLoading, setRescheduleSlotsLoading] = useState(false);
+  const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
   const fetchAppointments = async () => {
     try {
@@ -73,6 +88,74 @@ export default function PatientDashboard() {
       alert('An unexpected error occurred');
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  // Open the reschedule modal for a given appointment
+  const openReschedule = (appt: Appointment) => {
+    setRescheduleTarget(appt);
+    setRescheduleDate('');
+    setRescheduleSlots([]);
+    setRescheduleError(null);
+  };
+
+  const closeReschedule = () => {
+    setRescheduleTarget(null);
+    setRescheduleDate('');
+    setRescheduleSlots([]);
+    setRescheduleError(null);
+  };
+
+  // Fetch available slots for the target doctor on the newly chosen date
+  useEffect(() => {
+    if (!rescheduleTarget || !rescheduleDate) return;
+
+    const fetchRescheduleSlots = async () => {
+      setRescheduleSlotsLoading(true);
+      setRescheduleError(null);
+      try {
+        const res = await fetch(
+          `/api/slots?doctorId=${rescheduleTarget.doctorProfile.user.id}&date=${rescheduleDate}`
+        );
+        const data = await res.json();
+        if (res.ok) {
+          setRescheduleSlots(data.slots || []);
+        } else {
+          setRescheduleError(data.error || 'Failed to fetch available slots');
+        }
+      } catch (err) {
+        console.error(err);
+        setRescheduleError('Failed to fetch available slots');
+      } finally {
+        setRescheduleSlotsLoading(false);
+      }
+    };
+
+    fetchRescheduleSlots();
+  }, [rescheduleTarget, rescheduleDate]);
+
+  const handleConfirmReschedule = async (newDateTime: string) => {
+    if (!rescheduleTarget) return;
+    setRescheduleSubmitting(true);
+    setRescheduleError(null);
+    try {
+      const res = await fetch(`/api/appointments/${rescheduleTarget.id}/reschedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newDateTime }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        closeReschedule();
+        await fetchAppointments();
+      } else {
+        setRescheduleError(data.error || 'Failed to reschedule appointment');
+      }
+    } catch (err) {
+      console.error(err);
+      setRescheduleError('An unexpected error occurred');
+    } finally {
+      setRescheduleSubmitting(false);
     }
   };
 
@@ -218,6 +301,17 @@ export default function PatientDashboard() {
                               variant="ghost"
                               size="sm"
                               disabled={actionLoading === appt.id}
+                              onClick={() => openReschedule(appt)}
+                              className="text-navyBg hover:bg-slate-50 text-[10px] font-bold px-3 h-8 rounded-full border border-slate-200"
+                            >
+                              Reschedule
+                            </Button>
+                          )}
+                          {isUpcoming && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={actionLoading === appt.id}
                               onClick={() => handleCancel(appt.id)}
                               className="text-red-500 hover:bg-red-50 text-[10px] font-bold px-3 h-8 rounded-full border border-red-200"
                             >
@@ -283,6 +377,84 @@ export default function PatientDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Reschedule Modal */}
+      {rescheduleTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navyBg/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white rounded-[28px] shadow-xl border border-slate-100 p-6 space-y-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-black text-navyBg uppercase tracking-tight">Reschedule Appointment</h3>
+                <p className="text-xs text-slate-500 font-semibold mt-1">
+                  With <strong className="text-navyBg">{rescheduleTarget.doctorProfile.user.name}</strong> (
+                  {rescheduleTarget.doctorProfile.specialization})
+                </p>
+              </div>
+              <button
+                onClick={closeReschedule}
+                className="text-slate-400 hover:text-navyBg text-xs font-bold h-7 w-7 rounded-full hover:bg-slate-50 flex items-center justify-center"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-50 border rounded-xl text-xs font-semibold text-slate-600">
+              <span className="text-slate-400 block text-[10px] font-bold uppercase">Current Time</span>
+              {new Date(rescheduleTarget.dateTime).toLocaleString()}
+            </div>
+
+            {rescheduleError && (
+              <div className="p-3 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl">
+                {rescheduleError}
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase" htmlFor="reschedule-date">
+                New Date
+              </label>
+              <Input
+                id="reschedule-date"
+                type="date"
+                min={new Date().toISOString().split('T')[0]}
+                value={rescheduleDate}
+                onChange={(e) => setRescheduleDate(e.target.value)}
+                className="rounded-full border-slate-200 text-xs font-semibold px-4"
+              />
+            </div>
+
+            {rescheduleDate && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-navyBg uppercase flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-accentPink fill-accentPink" /> Available Slots
+                </h4>
+                {rescheduleSlotsLoading ? (
+                  <p className="text-xs text-slate-400 font-bold italic animate-pulse">Calculating availability...</p>
+                ) : rescheduleSlots.length === 0 ? (
+                  <p className="text-xs text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-100 italic font-semibold">
+                    No available time slots found on this date.
+                  </p>
+                ) : (
+                  <div className="grid gap-2 grid-cols-3">
+                    {rescheduleSlots.map((slot) => (
+                      <Button
+                        key={slot.dateTime}
+                        variant="outline"
+                        disabled={rescheduleSubmitting}
+                        onClick={() => handleConfirmReschedule(slot.dateTime)}
+                        className="text-xs py-2 rounded-full border-slate-200 hover:border-navyBg hover:bg-navyBg hover:text-white transition font-bold"
+                      >
+                        {rescheduleSubmitting ? '...' : slot.time}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

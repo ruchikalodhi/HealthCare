@@ -33,6 +33,9 @@ npm install
 Create a `.env` file in the root directory (using `.env.example` as a template):
 ```env
 DATABASE_URL="postgresql://user:pass@localhost:5432/healthcare"
+# Direct (non-pooled) connection, required by schema.prisma's `directUrl`.
+# Same value as DATABASE_URL unless your Postgres host pools connections.
+DIRECT_URL="postgresql://user:pass@localhost:5432/healthcare"
 NEXTAUTH_SECRET="your-jwt-auth-secret-here"
 NEXTAUTH_URL="http://localhost:3000"
 
@@ -190,7 +193,7 @@ healthcare-appointment-system/
 │           │       ├── connect/    # Starts the Google consent flow
 │           │       └── callback/   # Exchanges code → tokens → GoogleAccount row
 │           ├── slots/book/ · slots/hold/
-│           ├── appointments/ · appointments/[id]/cancel/ · pre-summary/ · post-summary/
+│           ├── appointments/ · appointments/[id]/cancel/ · reschedule/ · pre-summary/ · post-summary/
 │           ├── doctors/             # Patient-facing directory (any authenticated role),
 │           │                        #   ?specialization= filter, used by the booking flow
 │           ├── admin/doctors/[id]/  # Admin-only profile + leave-day updates/mutations

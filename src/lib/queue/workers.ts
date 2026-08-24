@@ -5,6 +5,7 @@ import { sendEmail } from '../email/client';
 import {
   getBookingConfirmationEmail,
   getCancellationEmail,
+  getRescheduleEmail,
   getPostVisitSummaryEmail,
   getMedicationReminderEmail,
 } from '../email/templates';
@@ -64,6 +65,31 @@ export async function processJobInline(
           );
 
           await sendEmail(patientEmail, subject, html, text);
+          break;
+        }
+
+        case 'send-reschedule-notice': {
+          const { patientEmail, doctorEmail, patientName, doctorName, oldDateTime, newDateTime } = data;
+
+          const { html, text, subject } = getRescheduleEmail(
+            patientName,
+            doctorName,
+            oldDateTime,
+            newDateTime
+          );
+
+          // Notify the patient of the new time
+          await sendEmail(patientEmail, subject, html, text);
+
+          // Also notify the doctor, mirroring the booking-confirmation pattern
+          if (doctorEmail) {
+            await sendEmail(
+              doctorEmail,
+              `Appointment Rescheduled: ${patientName}`,
+              html,
+              text
+            );
+          }
           break;
         }
 
