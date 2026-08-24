@@ -258,9 +258,7 @@ export default async function HomePage() {
         {/* Footer info bar */}
         <footer className="w-full text-center border-t border-slate-100 pt-6 text-[10px] text-slate-400 font-bold uppercase tracking-wider flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 z-10">
           <span>© 2026 HealthCare Clinic Systems Inc.</span>
-          <span className="text-slate-400">
-            Admin Portal Access: <code className="bg-slate-100 px-1 py-0.5 rounded text-navyBg">admin@healthcare.local / admin123</code>
-          </span>
+        
         </footer>
 
       </div>
