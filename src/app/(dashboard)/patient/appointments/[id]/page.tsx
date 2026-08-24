@@ -1,6 +1,9 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Role } from '@prisma/client';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, Stethoscope, HeartPulse, CheckSquare, Pill, AlertTriangle, ArrowLeft } from 'lucide-react';
@@ -12,6 +15,11 @@ export default async function PatientAppointmentDetailPage({
 }: {
   params: { id: string };
 }) {
+  const session = await getServerSession(authOptions);
+  if (!session || !session.user) {
+    redirect('/login');
+  }
+
   const appointment = await prisma.appointment.findUnique({
     where: { id: params.id },
     include: {
@@ -30,6 +38,16 @@ export default async function PatientAppointmentDetailPage({
   });
 
   if (!appointment) {
+    notFound();
+  }
+
+  // Ownership check: only the patient who booked this appointment (or an
+  // admin) may view it. Without this, any authenticated patient could load
+  // another patient's symptoms, AI summary, and prescriptions just by
+  // guessing/typing an appointment id in the URL.
+  const isOwner = appointment.patientId === session.user.id;
+  const isAdmin = session.user.role === Role.ADMIN;
+  if (!isOwner && !isAdmin) {
     notFound();
   }
 

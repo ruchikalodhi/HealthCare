@@ -6,6 +6,7 @@ import { redis } from '@/lib/redis';
 import { Role, AppointmentStatus } from '@prisma/client';
 
 import { emailQueue, calendarQueue } from '@/lib/queue/client';
+import { generatePreVisitSummary } from '@/lib/ai/summaries';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +40,14 @@ export async function POST(req: NextRequest) {
 
     const holdKey = `slot_hold:${doctorId}:${parsedDateTime.toISOString()}`;
 
-    // 2. Perform verification and inserts within a database transaction
+    // 2. Run real AI (or deterministic fallback) triage on the reported
+    // symptoms *before* opening the DB transaction, so the LLM round-trip
+    // never holds a transaction/lock open. This is what actually populates
+    // urgency / chiefComplaint / suggestedQuestions for the doctor's
+    // dashboard instead of a static placeholder string.
+    const preVisitResult = await generatePreVisitSummary(symptoms);
+
+    // 3. Perform verification and inserts within a database transaction
     const newAppointment = await prisma.$transaction(async (tx) => {
       // Re-verify Postgres availability
       const existingAppt = await tx.appointment.findFirst({
@@ -67,8 +75,9 @@ export async function POST(req: NextRequest) {
         throw new Error('HOLD_OWNERSHIP_MISMATCH');
       }
 
-      // Create booking along with nested AI symptom summary mock
-      const preVisitSummaryMock = `AI Symptom Analysis: Patient reports "${symptoms}". Clinical evaluation recommended for related concerns.`;
+      // Create booking along with the real AI (or fallback) symptom triage
+      // computed above, rather than a static placeholder string.
+      const preVisitSummaryText = `Pre-visit symptom review. Urgency: ${preVisitResult.urgency}. Complaint: ${preVisitResult.chiefComplaint}`;
 
       try {
         const appt = await tx.appointment.create({
@@ -80,7 +89,11 @@ export async function POST(req: NextRequest) {
             symptoms,
             aiSummary: {
               create: {
-                preVisitSummary: preVisitSummaryMock,
+                urgency: preVisitResult.urgency,
+                chiefComplaint: preVisitResult.chiefComplaint,
+                suggestedQuestions: preVisitResult.suggestedQuestions,
+                isFallback: preVisitResult.isFallback,
+                preVisitSummary: preVisitSummaryText,
                 postVisitSummary: 'Clinical checkup pending. Post-visit summary will be compiled by doctor.',
               },
             },
