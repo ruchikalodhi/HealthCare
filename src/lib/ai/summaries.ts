@@ -1,6 +1,24 @@
 import { openaiClient, isAIConfigured } from './client';
 import { PreVisitSummarySchema, PostVisitSummarySchema, PreVisitSummaryInput, PostVisitSummaryInput } from './schemas';
 import { PRE_VISIT_SYSTEM_PROMPT, POST_VISIT_SYSTEM_PROMPT } from './prompts';
+import { parseFrequencyToTimesPerDay } from '@/lib/medication/frequency';
+
+/**
+ * Ensures every medication in a post-visit summary has a structured
+ * `timesPerDay` value, deriving it from the free-text `frequency` when the
+ * LLM (or mock generator) didn't already supply one.
+ */
+function normalizeMedicationFrequencies(
+  result: PostVisitSummaryInput & { isFallback: boolean }
+): PostVisitSummaryInput & { isFallback: boolean } {
+  return {
+    ...result,
+    medications: result.medications.map((med) => ({
+      ...med,
+      timesPerDay: med.timesPerDay ?? parseFrequencyToTimesPerDay(med.frequency),
+    })),
+  };
+}
 
 const TIMEOUT_MS = 8000; // 8 seconds maximum timeout
 
@@ -192,7 +210,7 @@ export async function generatePostVisitSummary(
 
   const client = openaiClient;
   if (!isAIConfigured || !client) {
-    return getPostVisitMock(clinicalNotes);
+    return normalizeMedicationFrequencies(getPostVisitMock(clinicalNotes));
   }
 
   const apiCall = async (): Promise<PostVisitSummaryInput & { isFallback: boolean }> => {
@@ -224,10 +242,11 @@ export async function generatePostVisitSummary(
   };
 
   try {
-    return await Promise.race([
+    const result = await Promise.race([
       apiCall(),
       timeoutPromise(TIMEOUT_MS, POST_VISIT_FALLBACK),
     ]);
+    return normalizeMedicationFrequencies(result);
   } catch {
     return POST_VISIT_FALLBACK;
   }

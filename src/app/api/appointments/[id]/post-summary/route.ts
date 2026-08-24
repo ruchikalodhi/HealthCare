@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { generatePostVisitSummary } from '@/lib/ai/summaries';
 import { Role, AppointmentStatus } from '@prisma/client';
 import { emailQueue } from '@/lib/queue/client';
+import { parseFrequencyToTimesPerDay } from '@/lib/medication/frequency';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,6 +102,7 @@ export async function POST(
             medicationName: med.name,
             dosage: med.dosage,
             frequency: med.frequency,
+            timesPerDay: med.timesPerDay ?? parseFrequencyToTimesPerDay(med.frequency),
             instructions: med.instructions,
             startDate: now,
             endDate: endDate,

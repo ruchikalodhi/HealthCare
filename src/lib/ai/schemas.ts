@@ -14,6 +14,7 @@ export const PostVisitSummarySchema = z.object({
       name: z.string().min(1, 'Medication name is required'),
       dosage: z.string().min(1, 'Dosage description is required'),
       frequency: z.string().min(1, 'Frequency instruction is required'),
+      timesPerDay: z.coerce.number().int().positive().optional(),
       durationDays: z.coerce.number().int().positive('Duration days must be positive'),
       instructions: z.string().min(1, 'Instructions details are required'),
     })
