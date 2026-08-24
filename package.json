@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
-    "prisma:seed": "prisma db seed"
+    "prisma:seed": "prisma db seed",
+    "worker": "ts-node --compiler-options {\"module\":\"CommonJS\"} src/worker.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.12.1",

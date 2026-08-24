@@ -89,6 +89,36 @@ npm run dev
 ```
 The application is now live at **[http://localhost:3000](http://localhost:3000)**.
 
+### Step 5: Start the Background Worker (required if `REDIS_URL` is set)
+
+Booking confirmations, cancellation notices, post-visit summary emails, medication
+reminders, and Google Calendar sync are all dispatched as BullMQ jobs
+(`src/lib/queue/client.ts`). Those jobs are only *consumed* by the `Worker`
+instances defined in `src/lib/queue/workers.ts` — and nothing in the Next.js
+app itself keeps that module running long enough to process them.
+
+- **If `REDIS_URL` is left unset** (default for local dev), you don't need
+  this step — `MockQueue` processes jobs inline automatically.
+- **If `REDIS_URL` is set** (recommended for anything beyond local dev, since
+  the in-memory `MockQueue`/in-memory Redis fallback doesn't survive process
+  restarts or work across multiple server instances), run the worker as its
+  own long-lived process alongside the web app:
+
+  ```bash
+  npm run worker
+  ```
+
+  This process must **stay running continuously** — it's not a one-off
+  script. In production, run it as a second deployed service (a Render/
+  Railway/Fly.io "worker" service type, a small VM, or a Docker container)
+  pointed at the same `REDIS_URL` and `DATABASE_URL` as the web app.
+
+  ⚠️ **Vercel note:** Vercel's serverless functions terminate shortly after
+  returning a response and cannot host a long-lived worker process. If the
+  web app is deployed to Vercel, deploy `npm run worker` as a *separate*
+  always-on service elsewhere (Render/Railway background worker, Fly.io, a
+  VM, etc.) rather than trying to run it inside a Vercel function.
+
 ---
 
 ## 👥 Demo Test Credentials
@@ -114,6 +144,9 @@ healthcare-appointment-system/
 │   └── seed.ts                    # Multi-role test profiles seed script
 ├── src/
 │   ├── middleware.ts               # NextAuth path authorization guard (role-based route access)
+│   ├── worker.ts                   # Standalone entrypoint (`npm run worker`) — must run as its
+│   │                                #   own long-lived process to actually consume queued BullMQ
+│   │                                #   jobs when REDIS_URL is set (see "Step 5" above)
 │   ├── lib/
 │   │   ├── slots.ts                # Availability slot calculation engine
 │   │   ├── validations.ts          # Zod request schemas
@@ -158,7 +191,10 @@ healthcare-appointment-system/
 │           │       └── callback/   # Exchanges code → tokens → GoogleAccount row
 │           ├── slots/book/ · slots/hold/
 │           ├── appointments/ · appointments/[id]/cancel/ · pre-summary/ · post-summary/
-│           ├── admin/doctors/[id]/ # Profile + leave-day updates (cascades cancellations)
+│           ├── doctors/             # Patient-facing directory (any authenticated role),
+│           │                        #   ?specialization= filter, used by the booking flow
+│           ├── admin/doctors/[id]/  # Admin-only profile + leave-day updates/mutations
+│           │                        #   (cascades cancellations); distinct from doctors/ above
 │           ├── user/me/
 │           └── cron/medication-reminders/
 ```

@@ -32,6 +32,8 @@ export default function BookAppointmentPage() {
   // Booking Flow Steps
   const [step, setStep] = useState(1);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [specializations, setSpecializations] = useState<string[]>([]);
+  const [specializationFilter, setSpecializationFilter] = useState('');
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -49,24 +51,36 @@ export default function BookAppointmentPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // 1. Fetch doctors list
+  // 1. Fetch doctors list (patient-accessible directory, filterable by specialization)
   useEffect(() => {
     const fetchDoctors = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch('/api/admin/doctors');
+        const params = specializationFilter
+          ? `?specialization=${encodeURIComponent(specializationFilter)}`
+          : '';
+        const res = await fetch(`/api/doctors${params}`);
         if (res.ok) {
           const data = await res.json();
-          setDoctors(data);
+          setDoctors(data.doctors || []);
+          // Only replace the filter option list on the initial, unfiltered
+          // load so the dropdown doesn't shrink to just the active filter.
+          if (!specializationFilter) {
+            setSpecializations(data.specializations || []);
+          }
+        } else {
+          setError('Failed to load doctor directory.');
         }
       } catch (err) {
         console.error(err);
+        setError('Failed to load doctor directory.');
       } finally {
         setIsLoading(false);
       }
     };
     fetchDoctors();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [specializationFilter]);
 
   // 2. Fetch available slots when doctor and date are set
   useEffect(() => {
@@ -252,10 +266,34 @@ export default function BookAppointmentPage() {
             <CardDescription className="font-medium text-slate-400">Select an onboarded clinician to view schedules.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {specializations.length > 0 && (
+              <div className="max-w-xs space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase" htmlFor="specialization-filter">
+                  Filter by Specialization
+                </label>
+                <select
+                  id="specialization-filter"
+                  value={specializationFilter}
+                  onChange={(e) => setSpecializationFilter(e.target.value)}
+                  className="flex h-9 w-full rounded-full border border-slate-200 bg-white px-4 text-xs font-semibold shadow-sm focus:outline-none focus:ring-1 focus:ring-navyBg"
+                >
+                  <option value="">All Specializations</option>
+                  {specializations.map((spec) => (
+                    <option key={spec} value={spec}>
+                      {spec}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {isLoading ? (
               <p className="text-center text-slate-400 py-6 font-semibold">Loading doctor listings...</p>
             ) : doctors.length === 0 ? (
-              <p className="text-center text-slate-400 py-6 italic">No doctor profiles are available at this clinic yet.</p>
+              <p className="text-center text-slate-400 py-6 italic">
+                {specializationFilter
+                  ? `No doctors found for "${specializationFilter}". Try a different specialization.`
+                  : 'No doctor profiles are available at this clinic yet.'}
+              </p>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
                 {doctors.map((doc, idx) => {
