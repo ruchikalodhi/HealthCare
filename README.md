@@ -46,10 +46,12 @@ REDIS_URL="redis://localhost:6379"
 OPENAI_API_KEY="sk-proj-your-key"
 
 # Transactional Notifications (optional mock fallbacks)
-RESEND_API_KEY="re_yourkey"
 GOOGLE_CLIENT_ID="oauth-client-id"
 GOOGLE_CLIENT_SECRET="oauth-client-secret"
 GOOGLE_REDIRECT_URI="http://localhost:3000/api/auth/google/callback"
+
+# Required to call /api/cron/medication-reminders (see "Deployment" section)
+CRON_SECRET="a-random-secret-here"
 ```
 
 ### Step 2.5: Google Calendar Setup
@@ -71,6 +73,24 @@ appears on anyone's real calendar. To enable real Google Calendar events:
 7. **Connect an account in the app.** After logging in as a doctor (or patient), go to **Settings → Google Calendar → Connect Google Calendar**. This starts the consent flow at `/api/auth/google/connect` and stores the resulting tokens in the `GoogleAccount` table. Appointments are created on the calendar of the doctor tied to the appointment, with the patient and doctor added as attendees.
 
 If a doctor hasn't connected their Google account, booking still works — the system logs a mock event instead of failing the request.
+
+### Step 2.6: Generate the initial migration (one-time, before first deploy)
+
+This repo currently has no `prisma/migrations/` history — schema changes have
+only ever been applied with `prisma db push`, which syncs the schema directly
+and can silently drop or alter columns on a database that already has data.
+That's fine for a disposable local dev DB; it is **not** safe once real rows
+exist. Before your first production deploy, generate a real migration once,
+against your local dev database, and commit it:
+
+```bash
+npx prisma migrate dev --name init
+```
+
+This creates `prisma/migrations/<timestamp>_init/migration.sql`. Commit that
+folder. From then on, use `npx prisma migrate dev --name <change>` locally for
+schema changes, and `npx prisma migrate deploy` (not `db push`) in your
+production deploy pipeline.
 
 ### Step 3: Run Database Migrations & Seeds
 Generate Prisma typings, push schemas, and execute the seeder script to populate demo profiles:

@@ -4,6 +4,20 @@ import * as bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
+  // This seed creates demo accounts with well-known, weak passwords
+  // (admin123 / doctor123 / patient123). Never run it against a real
+  // production database. Set ALLOW_PROD_SEED=true only if you've deliberately
+  // decided you want these demo accounts in prod and will rotate/remove the
+  // credentials immediately after.
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PROD_SEED !== 'true') {
+    console.error(
+      '[Seed] Refusing to run: NODE_ENV=production and ALLOW_PROD_SEED is not "true". ' +
+        'This seed creates accounts with known demo passwords — set ALLOW_PROD_SEED=true ' +
+        'only if that is intentional.'
+    );
+    process.exit(1);
+  }
+
   console.log('Seeding database with Phase 5 demo data...');
 
   // 1. Create Admin

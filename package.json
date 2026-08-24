@@ -2,11 +2,15 @@
   "name": "healthcare-appointment-system",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=18.18.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:seed": "prisma db seed",
     "worker": "ts-node --compiler-options {\"module\":\"CommonJS\"} src/worker.ts"
@@ -20,7 +24,7 @@
     "googleapis": "^144.0.0",
     "ioredis": "^6.0.0",
     "lucide-react": "^0.368.0",
-    "next": "14.1.4",
+    "next": "14.2.35",
     "next-auth": "^4.24.7",
     "nodemailer": "^7.0.13",
     "openai": "^7.5.0",

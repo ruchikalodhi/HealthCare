@@ -5,11 +5,31 @@ import { getReminderIntervalMs } from '@/lib/medication/frequency';
 
 export const dynamic = 'force-dynamic';
 
+// Shared-secret check so this endpoint can't be triggered by anyone who finds
+// the URL. Vercel Cron automatically sends this header when CRON_SECRET is
+// set as an env var (https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs).
+// If deploying the scheduler elsewhere, configure it to send the same header.
+function isAuthorizedCronRequest(req: NextRequest): boolean {
+  const expected = process.env.CRON_SECRET;
+  if (!expected) {
+    // Fail closed: an unset secret should never mean "allow anyone through".
+    console.error('[Medication Cron] CRON_SECRET is not configured — rejecting request.');
+    return false;
+  }
+  return req.headers.get('authorization') === `Bearer ${expected}`;
+}
+
 export async function GET(req: NextRequest) {
+  if (!isAuthorizedCronRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   return handleCron();
 }
 
 export async function POST(req: NextRequest) {
+  if (!isAuthorizedCronRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   return handleCron();
 }
 
