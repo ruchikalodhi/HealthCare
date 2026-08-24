@@ -87,8 +87,12 @@ model Appointment {
   aiSummary           AISummary?
   medicationSchedules MedicationSchedule[]
 
-  // Indexes to speed up appointment slot searches and avoid double booking
-  @@index([doctorProfileId, dateTime])
+  // Hard DB-level guarantee against double-booking: a second concurrent
+  // insert for the same doctor+slot will fail with a unique-constraint
+  // violation (Prisma error code P2002) even if two transactions both
+  // pass the "no existing appointment" pre-check under READ COMMITTED.
+  // A unique constraint also creates an index, so the old @@index is redundant.
+  @@unique([doctorProfileId, dateTime])
 }
 
 model AISummary {

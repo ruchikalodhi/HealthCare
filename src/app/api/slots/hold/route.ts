@@ -56,28 +56,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Check for existing holds in Redis
+    // 3. Atomically try to acquire the hold with SET NX EX. This is the
+    // fix for the check-then-write race: previously we did a `get` and
+    // then a separate `set`, which let two concurrent requests both see
+    // "no hold" before either wrote one. SET ... NX is a single atomic
+    // Redis command, so only one caller can ever win the acquisition.
     const holdKey = `slot_hold:${doctorId}:${parsedDateTime.toISOString()}`;
-    const existingHold = await redis.get(holdKey);
-
-    if (existingHold) {
-      const holdData = JSON.parse(existingHold);
-      if (holdData.patientId !== session.user.id) {
-        return NextResponse.json(
-          { error: 'This slot is temporarily held by another patient' },
-          { status: 409 }
-        );
-      }
-      // If it belongs to the same patient, we let them renew it
-    }
-
-    // 4. Create/renew hold
     const holdValue = JSON.stringify({
       patientId: session.user.id,
       timestamp: Date.now(),
     });
 
-    await redis.set(holdKey, holdValue, 'EX', HOLD_TTL_SECONDS);
+    const acquired = await redis.set(holdKey, holdValue, 'EX', HOLD_TTL_SECONDS, 'NX');
+
+    if (acquired !== 'OK') {
+      // Someone already holds this slot (or it's our own hold and we want
+      // to renew it) - find out which before deciding how to respond.
+      const existingHold = await redis.get(holdKey);
+      const holdData = existingHold ? JSON.parse(existingHold) : null;
+
+      if (!holdData) {
+        // Extremely rare: the hold expired between the failed NX and this
+        // read. Retry once, atomically.
+        const retryAcquired = await redis.set(holdKey, holdValue, 'EX', HOLD_TTL_SECONDS, 'NX');
+        if (retryAcquired !== 'OK') {
+          return NextResponse.json(
+            { error: 'This slot is temporarily held by another patient' },
+            { status: 409 }
+          );
+        }
+      } else if (holdData.patientId !== session.user.id) {
+        return NextResponse.json(
+          { error: 'This slot is temporarily held by another patient' },
+          { status: 409 }
+        );
+      } else {
+        // Same patient renewing their own hold - safe to overwrite since
+        // only this patient can legitimately hold this key.
+        await redis.set(holdKey, holdValue, 'EX', HOLD_TTL_SECONDS);
+      }
+    }
 
     return NextResponse.json(
       {

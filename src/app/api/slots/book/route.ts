@@ -69,27 +69,40 @@ export async function POST(req: NextRequest) {
 
       // Create booking along with nested AI symptom summary mock
       const preVisitSummaryMock = `AI Symptom Analysis: Patient reports "${symptoms}". Clinical evaluation recommended for related concerns.`;
-      
-      const appt = await tx.appointment.create({
-        data: {
-          patientId: session.user.id,
-          doctorProfileId: doctor.doctorProfile!.id,
-          dateTime: parsedDateTime,
-          status: AppointmentStatus.BOOKED,
-          symptoms,
-          aiSummary: {
-            create: {
-              preVisitSummary: preVisitSummaryMock,
-              postVisitSummary: 'Clinical checkup pending. Post-visit summary will be compiled by doctor.',
+
+      try {
+        const appt = await tx.appointment.create({
+          data: {
+            patientId: session.user.id,
+            doctorProfileId: doctor.doctorProfile!.id,
+            dateTime: parsedDateTime,
+            status: AppointmentStatus.BOOKED,
+            symptoms,
+            aiSummary: {
+              create: {
+                preVisitSummary: preVisitSummaryMock,
+                postVisitSummary: 'Clinical checkup pending. Post-visit summary will be compiled by doctor.',
+              },
             },
           },
-        },
-        include: {
-          aiSummary: true,
-        },
-      });
+          include: {
+            aiSummary: true,
+          },
+        });
 
-      return appt;
+        return appt;
+      } catch (createError: any) {
+        // Belt-and-suspenders: the pre-check above can race under
+        // READ COMMITTED, but the @@unique([doctorProfileId, dateTime])
+        // DB constraint is the real backstop. A second concurrent insert
+        // that slipped past the pre-check fails here with Prisma error
+        // P2002, which we map to the same clean SLOT_ALREADY_BOOKED path
+        // instead of surfacing a raw 500.
+        if (createError?.code === 'P2002') {
+          throw new Error('SLOT_ALREADY_BOOKED');
+        }
+        throw createError;
+      }
     });
 
     // 3. Clear Redis hold key after transaction commits successfully

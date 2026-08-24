@@ -15,8 +15,25 @@ class InMemoryRedis {
     return item.value;
   }
 
-  async set(key: string, value: string, mode?: 'EX', seconds?: number): Promise<'OK'> {
+  async set(
+    key: string,
+    value: string,
+    mode?: 'EX',
+    seconds?: number,
+    flag?: 'NX'
+  ): Promise<'OK' | null> {
+    if (flag === 'NX') {
+      const existing = this.store.get(key);
+      // Treat an expired entry as absent, same as real Redis.
+      if (existing && Date.now() <= existing.expiry) {
+        return null;
+      }
+    }
     const expiry = seconds ? Date.now() + seconds * 1000 : Infinity;
+    // Map.set is synchronous, so within this single Node process there is
+    // no window between the NX existence check above and this write for
+    // another request to interleave - this mirrors real Redis's atomicity
+    // for the in-memory dev fallback.
     this.store.set(key, { value, expiry });
     return 'OK';
   }
