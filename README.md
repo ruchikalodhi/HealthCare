@@ -2,6 +2,8 @@
 
 HealthCare is a secure, multi-role medical booking and consultation platform. It enables patients to book visits with temporary slots locking, provides doctors with AI-powered pre-visit insights, clinical translations, and automated medication schedules, and gives admins granular doctor management controls.
 
+<img width="1900" height="1079" alt="image" src="https://github.com/user-attachments/assets/54efc2bf-0cbd-495e-9f83-6749fe2a83c3" />
+
 ---
 
 ## 🚀 Key Feature Highlights
